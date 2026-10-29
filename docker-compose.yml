@@ -1,0 +1,95 @@
+version: "3.8"
+
+services:
+  # ----------------------------------------------------------------------------
+  # Complete Unified ShadowOps Service (Backend + Frontend)
+  # ----------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shadowops-platform
+    restart: unless-stopped
+    ports:
+      - "8000:8000"     # FastAPI Backend
+      - "3000:3000"     # Next.js Frontend
+      - "54321:54321"   # Supabase Gateway
+      - "9099:9099"     # Firebase Auth
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - PORT=8000
+      - HOST=0.0.0.0
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:8000
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - DATABASE_URL=sqlite+aiosqlite:////app/shadowops.db
+      - AI_PROVIDER=gemini
+    volumes:
+      - ./shadowops.db:/app/shadowops.db
+    command: ["start"]
+
+  # ----------------------------------------------------------------------------
+  # Optional: Standalone Development Backend with Live Reload
+  # ----------------------------------------------------------------------------
+  backend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shadowops-backend-dev
+    profiles: ["dev"]
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - PORT=8000
+      - HOST=0.0.0.0
+      - FRONTEND_URL=http://localhost:3000
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - DATABASE_URL=sqlite+aiosqlite:////app/shadowops.db
+      - AI_PROVIDER=fake
+    volumes:
+      - ./backend:/app/backend
+      - ./shadowops.db:/app/shadowops.db
+    command: ["backend"]
+
+  # ----------------------------------------------------------------------------
+  # Optional: Standalone Development Frontend with Hot Reload
+  # ----------------------------------------------------------------------------
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shadowops-frontend-dev
+    profiles: ["dev"]
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+      - /app/frontend/.next
+    command: ["dev"]
+
+  # ----------------------------------------------------------------------------
+  # Optional: Local PostgreSQL Database (Supabase compatible)
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: shadowops-postgres
+    profiles: ["db"]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Password123!
+      POSTGRES_DB: shadowops
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  pgdata:

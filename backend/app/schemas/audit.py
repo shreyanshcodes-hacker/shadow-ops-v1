@@ -1,0 +1,82 @@
+from datetime import datetime
+from uuid import UUID
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+from enum import Enum
+
+
+class AuditEventType(str, Enum):
+    USER_AUTHENTICATED = "USER_AUTHENTICATED"
+    WORKSPACE_CREATED = "WORKSPACE_CREATED"
+    MEMBER_ADDED = "MEMBER_ADDED"
+    MEMBER_REMOVED = "MEMBER_REMOVED"
+    ASSET_CREATED = "ASSET_CREATED"
+    AUTHORIZATION_CREATED = "AUTHORIZATION_CREATED"
+    AUTHORIZATION_CHANGED = "AUTHORIZATION_CHANGED"
+    SCAN_REQUESTED = "SCAN_REQUESTED"
+    SCAN_BLOCKED = "SCAN_BLOCKED"
+    SCAN_CREATED = "SCAN_CREATED"
+    SCAN_STARTED = "SCAN_STARTED"
+    SCAN_COMPLETED = "SCAN_COMPLETED"
+    SCAN_FAILED = "SCAN_FAILED"
+    SCAN_CANCELLED = "SCAN_CANCELLED"
+    AI_ANALYSIS_EXECUTED = "AI_ANALYSIS_EXECUTED"
+    AI_ANALYSIS_REQUESTED = "AI_ANALYSIS_REQUESTED"
+    AI_ANALYSIS_STARTED = "AI_ANALYSIS_STARTED"
+    AI_ANALYSIS_COMPLETED = "AI_ANALYSIS_COMPLETED"
+    AI_ANALYSIS_FAILED = "AI_ANALYSIS_FAILED"
+    RELATIONSHIP_SUGGESTED = "RELATIONSHIP_SUGGESTED"
+    RELATIONSHIP_CONFIRMED = "RELATIONSHIP_CONFIRMED"
+    RELATIONSHIP_DISMISSED = "RELATIONSHIP_DISMISSED"
+    ATTACK_PATH_CREATED = "ATTACK_PATH_CREATED"
+    ATTACK_PATH_UPDATED = "ATTACK_PATH_UPDATED"
+    RISK_CALCULATED = "RISK_CALCULATED"
+    SECURITY_TEAM_STARTED = "SECURITY_TEAM_STARTED"
+    SECURITY_TEAM_COMPLETED = "SECURITY_TEAM_COMPLETED"
+    SECURITY_TEAM_PARTIAL = "SECURITY_TEAM_PARTIAL"
+    SECURITY_TEAM_FAILED = "SECURITY_TEAM_FAILED"
+    SECURITY_TEAM_CANCELED = "SECURITY_TEAM_CANCELED"
+    SECURITY_TEAM_REVIEWED = "SECURITY_TEAM_REVIEWED"
+    AGENT_STARTED = "AGENT_STARTED"
+    AGENT_COMPLETED = "AGENT_COMPLETED"
+    AGENT_FAILED = "AGENT_FAILED"
+    REMEDIATION_PROPOSED = "REMEDIATION_PROPOSED"
+    REMEDIATION_VALIDATED = "REMEDIATION_VALIDATED"
+    REMEDIATION_APPROVED = "REMEDIATION_APPROVED"
+    REMEDIATION_REJECTED = "REMEDIATION_REJECTED"
+    REMEDIATION_APPLIED = "REMEDIATION_APPLIED"
+    REMEDIATION_FAILED = "REMEDIATION_FAILED"
+    REMEDIATION_ROLLED_BACK = "REMEDIATION_ROLLED_BACK"
+    REPORT_GENERATED = "REPORT_GENERATED"
+    REPORT_EXPORTED = "REPORT_EXPORTED"
+    REPORT_DOWNLOADED = "REPORT_DOWNLOADED"
+
+
+class AuditLogCreate(BaseModel):
+    workspace_id: UUID
+    user_id: Optional[UUID] = None
+    action: AuditEventType
+    resource_type: str
+    resource_id: Optional[UUID] = None
+    old_state: Optional[Dict[str, Any]] = None
+    new_state: Optional[Dict[str, Any]] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    request_id: Optional[UUID] = None
+
+
+class AuditLogResponse(BaseModel):
+    id: int
+    workspace_id: UUID
+    user_id: Optional[UUID] = None
+    action: str
+    resource_type: str
+    resource_id: Optional[UUID] = None
+    old_state: Optional[Dict[str, Any]] = None
+    new_state: Optional[Dict[str, Any]] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    request_id: UUID
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

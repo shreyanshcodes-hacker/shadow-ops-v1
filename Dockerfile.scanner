@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+# Install system dependencies & Semgrep
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    ca-certificates \
+    && pip install --no-cache-dir semgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as non-privileged security operator
+RUN useradd -m -u 10001 scanner
+USER scanner
+
+WORKDIR /workspace/sandbox
+
+ENTRYPOINT ["semgrep"]
+CMD ["--help"]
