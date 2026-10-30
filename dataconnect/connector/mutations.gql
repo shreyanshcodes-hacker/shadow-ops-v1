@@ -1,0 +1,28 @@
+# ==============================================================================
+# SHADOWOPS — FIREBASE DATA CONNECT APPLICATION MUTATIONS
+# ==============================================================================
+
+# 1. Mark an in-app notification as read
+mutation MarkNotificationAsRead($id: UUID!, $workspaceId: UUID!, $userId: UUID!) 
+  @auth(expr: "auth.uid != null") {
+  notification_update(
+    key: { id: $id },
+    data: { readAt_expr: "request.time" }
+  )
+}
+
+# 2. Update user notification preferences
+mutation UpdateNotificationPreferences(
+  $id: UUID!,
+  $channels: Any!,
+  $muteLowSeverity: Boolean!
+) @auth(expr: "auth.uid != null") {
+  notificationPreference_update(
+    key: { id: $id },
+    data: {
+      channels: $channels,
+      muteLowSeverity: $muteLowSeverity,
+      updatedAt_expr: "request.time"
+    }
+  )
+}

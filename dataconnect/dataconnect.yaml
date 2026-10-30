@@ -1,0 +1,11 @@
+specVersion: "v1alpha"
+serviceId: "shadowops-service"
+location: "us-central1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "shadowops"
+      cloudSql:
+        instanceId: "shadowops-prod-pg"
+connectorDirs: ["./connector"]

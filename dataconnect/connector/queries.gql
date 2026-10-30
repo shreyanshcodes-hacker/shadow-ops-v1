@@ -1,0 +1,76 @@
+# ==============================================================================
+# SHADOWOPS — FIREBASE DATA CONNECT APPLICATION QUERIES
+# Enforces strictly authenticated caller and workspace isolation
+# ==============================================================================
+
+# 1. Fetch authenticated user's profile
+query GetCurrentProfile @auth(expr: "auth.uid != null") {
+  profiles(where: { firebaseUid: { eq_expr: "auth.uid" } }) {
+    id
+    email
+    displayName
+    avatarUrl
+    role
+    createdAt
+    lastLoginAt
+  }
+}
+
+# 2. List workspaces the user is a member of
+query ListUserWorkspaces($userId: UUID!) @auth(expr: "auth.uid != null") {
+  workspaceMembers(where: { userId: { eq: $userId } }) {
+    workspaceId
+    role
+    joinedAt
+  }
+}
+
+# 3. List active assets in a workspace
+query ListWorkspaceAssets($workspaceId: UUID!) @auth(expr: "auth.uid != null") {
+  assets(where: { 
+    workspaceId: { eq: $workspaceId }
+    isActive: { eq: true }
+  }) {
+    id
+    name
+    type
+    target
+    environment
+    criticality
+    createdAt
+  }
+}
+
+# 4. List findings in a workspace
+query ListWorkspaceFindings($workspaceId: UUID!, $severity: String) @auth(expr: "auth.uid != null") {
+  findings(where: { 
+    workspaceId: { eq: $workspaceId }
+  }) {
+    id
+    title
+    description
+    severity
+    status
+    cweId
+    cveId
+    filePath
+    lineNumber
+    createdAt
+  }
+}
+
+# 5. List unread notifications for user
+query ListUserNotifications($workspaceId: UUID!, $userId: UUID!) @auth(expr: "auth.uid != null") {
+  notifications(where: {
+    workspaceId: { eq: $workspaceId }
+    userId: { eq: $userId }
+  }) {
+    id
+    type
+    title
+    message
+    readAt
+    sentAt
+    createdAt
+  }
+}

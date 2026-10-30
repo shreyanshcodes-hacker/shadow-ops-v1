@@ -1,0 +1,100 @@
+# ==============================================================================
+# SHADOWOPS — FIREBASE DATA CONNECT (SQL CONNECT) SCHEMA SPECIFICATION
+# Maps PostgreSQL tables to Firebase Data Connect GraphQL Entities
+# Source of Truth: Google Cloud SQL PostgreSQL schema
+# ==============================================================================
+
+type Profile @table(name: "profiles") {
+  id: UUID! @default(expr: "gen_random_uuid()")
+  firebaseUid: String! @col(name: "firebase_uid")
+  email: String!
+  displayName: String @col(name: "display_name")
+  avatarUrl: String @col(name: "avatar_url")
+  role: String!
+  createdAt: Timestamp! @col(name: "created_at") @default(expr: "now()")
+  updatedAt: Timestamp! @col(name: "updated_at") @default(expr: "now()")
+  lastLoginAt: Timestamp @col(name: "last_login_at")
+}
+
+type Workspace @table(name: "workspaces") {
+  id: UUID! @default(expr: "gen_random_uuid()")
+  name: String!
+  slug: String!
+  ownerId: UUID! @col(name: "owner_id")
+  plan: String!
+  settings: Any!
+  createdAt: Timestamp! @col(name: "created_at") @default(expr: "now()")
+  updatedAt: Timestamp! @col(name: "updated_at") @default(expr: "now()")
+  deletedAt: Timestamp @col(name: "deleted_at")
+}
+
+type WorkspaceMember @table(name: "workspace_members") {
+  id: UUID! @default(expr: "gen_random_uuid()")
+  workspaceId: UUID! @col(name: "workspace_id")
+  userId: UUID! @col(name: "user_id")
+  role: String!
+  invitedBy: UUID @col(name: "invited_by")
+  invitedAt: Timestamp! @col(name: "invited_at") @default(expr: "now()")
+  joinedAt: Timestamp @col(name: "joined_at")
+  createdAt: Timestamp! @col(name: "created_at") @default(expr: "now()")
+}
+
+type Asset @table(name: "assets") {
+  id: UUID! @default(expr: "gen_random_uuid()")
+  workspaceId: UUID! @col(name: "workspace_id")
+  name: String!
+  type: String!
+  target: String!
+  environment: String!
+  criticality: String!
+  isActive: Boolean! @col(name: "is_active")
+  metadata: Any!
+  createdBy: UUID! @col(name: "created_by")
+  createdAt: Timestamp! @col(name: "created_at") @default(expr: "now()")
+  updatedAt: Timestamp! @col(name: "updated_at") @default(expr: "now()")
+}
+
+type Finding @table(name: "findings") {
+  id: UUID! @default(expr: "gen_random_uuid()")
+  workspaceId: UUID! @col(name: "workspace_id")
+  assetId: UUID! @col(name: "asset_id")
+  scanId: UUID! @col(name: "scan_id")
+  title: String!
+  description: String!
+  severity: String!
+  status: String!
+  cweId: String @col(name: "cwe_id")
+  cveId: String @col(name: "cve_id")
+  fingerprint: String!
+  filePath: String @col(name: "file_path")
+  lineNumber: Int @col(name: "line_number")
+  codeSnippet: String @col(name: "code_snippet")
+  rawFinding: Any! @col(name: "raw_finding")
+  createdAt: Timestamp! @col(name: "created_at") @default(expr: "now()")
+  updatedAt: Timestamp! @col(name: "updated_at") @default(expr: "now()")
+}
+
+type Notification @table(name: "notifications") {
+  id: UUID! @default(expr: "gen_random_uuid()")
+  workspaceId: UUID! @col(name: "workspace_id")
+  userId: UUID! @col(name: "user_id")
+  type: String!
+  title: String!
+  message: String!
+  referenceType: String @col(name: "reference_type")
+  referenceId: UUID @col(name: "reference_id")
+  channels: [String!]
+  readAt: Timestamp @col(name: "read_at")
+  sentAt: Timestamp @col(name: "sent_at")
+  createdAt: Timestamp! @col(name: "created_at") @default(expr: "now()")
+}
+
+type NotificationPreference @table(name: "notification_preferences") {
+  id: UUID! @default(expr: "gen_random_uuid()")
+  workspaceId: UUID! @col(name: "workspace_id")
+  userId: UUID! @col(name: "user_id")
+  channels: Any!
+  muteLowSeverity: Boolean! @col(name: "mute_low_severity")
+  createdAt: Timestamp! @col(name: "created_at") @default(expr: "now()")
+  updatedAt: Timestamp! @col(name: "updated_at") @default(expr: "now()")
+}

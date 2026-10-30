@@ -22,13 +22,25 @@ class Settings(BaseSettings):
     BACKEND_URL: str = "http://localhost:8000"
     PORT: int = 8000
 
-    # Supabase PostgreSQL & API
+    # Database Configuration (Supabase PostgreSQL / Google Cloud SQL)
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
     DIRECT_URL: Optional[str] = None
     SUPABASE_URL: str = "https://placeholder.supabase.co"
     SUPABASE_ANON_KEY: str = "placeholder-anon-key"
     SUPABASE_SERVICE_ROLE_KEY: str = "placeholder-service-role-key"
     SUPABASE_JWT_SECRET: Optional[str] = None
+
+    # Google Cloud SQL Configuration
+    USE_CLOUD_SQL_CONNECTOR: bool = False
+    CLOUD_SQL_CONNECTION_NAME: Optional[str] = None
+    CLOUD_SQL_DATABASE: str = "shadowops"
+    CLOUD_SQL_USER: Optional[str] = None
+    CLOUD_SQL_PASSWORD: Optional[str] = None
+    CLOUD_SQL_IAM_AUTH: bool = False
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 5
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
 
     # Firebase Authentication
     FIREBASE_PROJECT_ID: str = "shadow-ops-6957d"
