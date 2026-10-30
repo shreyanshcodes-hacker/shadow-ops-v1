@@ -1,22 +1,62 @@
+from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional, Any
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
 from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.sql import sqltypes
+from sqlalchemy.dialects.postgresql.asyncpg import PGDialect_asyncpg, AsyncpgDateTime
 from app.core.config import settings
 from app.core.logging import logger
 
 _cloud_sql_connector: Optional[Any] = None
 
 
+class SafeAsyncpgDateTime(AsyncpgDateTime):
+    """
+    Ensures naive UTC datetime objects (such as from datetime.utcnow()) are
+    automatically tagged with timezone.utc when bound to PostgreSQL TIMESTAMPTZ
+    columns via asyncpg, preventing offset-naive vs offset-aware DataErrors.
+    """
+    def bind_processor(self, dialect):
+        def process(value):
+            if isinstance(value, datetime):
+                if self.timezone and value.tzinfo is None:
+                    return value.replace(tzinfo=timezone.utc)
+                elif not self.timezone and value.tzinfo is not None:
+                    return value.astimezone(timezone.utc).replace(tzinfo=None)
+            return value
+        return process
+
+
+PGDialect_asyncpg.colspecs = {
+    **PGDialect_asyncpg.colspecs,
+    sqltypes.DateTime: SafeAsyncpgDateTime,
+}
+
+
 def get_async_database_url(url: str) -> str:
     """Normalize database connection string to asyncpg for async SQLAlchemy."""
+    url = url.strip()
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
 
-    # Normalize sslmode=require to ssl=require for asyncpg compatibility
-    if "sslmode=" in url:
-        url = url.replace("sslmode=require", "ssl=require").replace("sslmode=", "ssl=")
+    # Clean query parameters for asyncpg compatibility (sslmode -> ssl, strip pgbouncer)
+    if "?" in url:
+        base, query = url.split("?", 1)
+        cleaned_params = []
+        for param in query.split("&"):
+            if not param:
+                continue
+            key_lower = param.split("=", 1)[0].lower()
+            if key_lower in ("pgbouncer", "prepared_statements"):
+                continue
+            if key_lower == "sslmode":
+                val = param.split("=", 1)[1] if "=" in param else "require"
+                cleaned_params.append(f"ssl={val}")
+            else:
+                cleaned_params.append(param)
+        url = f"{base}?{'&'.join(cleaned_params)}" if cleaned_params else base
     return url
 
 
@@ -61,12 +101,23 @@ def create_engine_instance() -> AsyncEngine:
     # Fallback to standard connection URL (Supabase PostgreSQL / Local Postgres / SQLite)
     normalized_url = get_async_database_url(settings.DATABASE_URL)
     is_sqlite = normalized_url.startswith("sqlite")
-    
+
+    connect_args = {}
+    if not is_sqlite:
+        # Disable asyncpg & SQLAlchemy prepared statement caches for Supabase Supavisor/PgBouncer
+        # and enforce fast connection/command timeouts to prevent 131s stale socket hangs.
+        connect_args = {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "timeout": 10,
+            "command_timeout": 25,
+        }
+
     return create_async_engine(
         normalized_url,
-        echo=settings.DEBUG and not settings.is_production,
-        poolclass=NullPool if (settings.is_production and not is_sqlite) else None,
-        pool_pre_ping=True,
+        echo=False,
+        poolclass=NullPool if not is_sqlite else None,
+        connect_args=connect_args,
     )
 
 

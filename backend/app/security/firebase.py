@@ -19,11 +19,17 @@ def init_firebase() -> None:
         from firebase_admin import credentials
 
         if settings.FIREBASE_CLIENT_EMAIL and settings.FIREBASE_PRIVATE_KEY:
+            cleaned_key = (
+                settings.FIREBASE_PRIVATE_KEY.strip()
+                .strip('"')
+                .strip("'")
+                .replace("\\n", "\n")
+            )
             cred_dict = {
                 "type": "service_account",
                 "project_id": settings.FIREBASE_PROJECT_ID,
-                "private_key": settings.FIREBASE_PRIVATE_KEY.replace("\\n", "\n"),
-                "client_email": settings.FIREBASE_CLIENT_EMAIL,
+                "private_key": cleaned_key,
+                "client_email": settings.FIREBASE_CLIENT_EMAIL.strip().strip('"').strip("'"),
                 "token_uri": "https://oauth2.googleapis.com/token",
             }
             cred = credentials.Certificate(cred_dict)
@@ -61,7 +67,7 @@ def verify_firebase_id_token(token: str) -> Dict[str, Any]:
             "email_verified": True,
         }
 
-    # Verify with Firebase Admin SDK if initialized
+    # Verify with Firebase Admin SDK if initialized with service account
     if _firebase_initialized:
         try:
             from firebase_admin import auth
@@ -74,6 +80,32 @@ def verify_firebase_id_token(token: str) -> Dict[str, Any]:
                 detail=f"Invalid or expired token: {str(e)}",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+    # Verify cryptographically against Google's public Firebase X.509 certificates
+    # even when service account private key is not provided on the server
+    if not settings.is_testing and settings.FIREBASE_PROJECT_ID:
+        try:
+            from google.oauth2 import id_token
+            from google.auth.transport import requests as google_requests
+
+            decoded = id_token.verify_firebase_token(
+                token,
+                google_requests.Request(),
+                audience=settings.FIREBASE_PROJECT_ID,
+            )
+            if decoded:
+                uid = decoded.get("uid") or decoded.get("user_id") or decoded.get("sub")
+                if uid:
+                    decoded["uid"] = uid
+                    return decoded
+        except Exception as e:
+            logger.warning("google_public_cert_firebase_verify_failed", error=str(e))
+            if settings.is_production:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"Invalid or expired Firebase ID token: {str(e)}",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
     # Fallback JWT decode for local development ONLY when NOT in production
     if settings.is_production:

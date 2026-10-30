@@ -79,6 +79,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     """
     Defensive global exception handler:
     Logs full exception server-side while ensuring NO sensitive stack traces leak to client.
+    Preserves CORS headers for authorized origins so browsers surface structured API errors.
     """
     logger.error(
         "unhandled_server_exception",
@@ -86,8 +87,16 @@ async def generic_exception_handler(request: Request, exc: Exception):
         error=str(exc),
         exc_info=True,
     )
+    headers = {}
+    origin = request.headers.get("origin")
+    if origin and origin.rstrip("/") in settings.parsed_cors_origins:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        headers=headers,
         content={
             "error": "INTERNAL_SERVER_ERROR",
             "message": "An unexpected error occurred while processing your request.",
