@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Layers,
 } from "lucide-react";
+import { MarkdownMessage } from "@/components/chat/MarkdownMessage";
 
 interface ChatMessage {
   id: string;
@@ -234,9 +235,7 @@ export default function SecurityChatPage() {
                   </div>
 
                   {/* Message Body */}
-                  <div className="whitespace-pre-wrap leading-relaxed text-xs md:text-sm">
-                    {msg.content}
-                  </div>
+                  <MarkdownMessage content={msg.content} isUser={msg.role === "user"} />
 
                   {/* Suggested Prompts if provided */}
                   {msg.suggestedActions && msg.suggestedActions.length > 0 && (

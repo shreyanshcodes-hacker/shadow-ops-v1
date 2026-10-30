@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 import { useAuth } from "@/context/AuthContext";
-import { useDemoMode } from "@/context/DemoModeContext";
 
 interface NavItem {
   name: string;
@@ -37,7 +36,6 @@ export function CommandCenterShell({
 }) {
   const pathname = usePathname();
   const { profile, logout } = useAuth();
-  const { isDemoMode, toggleDemoMode } = useDemoMode();
 
   const navItems: NavItem[] = [
     { name: "Command Center", href: "/dashboard", icon: Radio, implemented: true },
@@ -59,7 +57,7 @@ export function CommandCenterShell({
       {/* Sidebar */}
       <aside className="w-64 border-r border-border-subtle bg-background-secondary flex flex-col shrink-0">
         {/* Brand */}
-        <div className="h-14 border-b border-border-subtle px-4 flex items-center justify-between">
+        <div className="h-14 border-b border-border-subtle px-4 flex items-center">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <div className="h-7 w-7 rounded bg-crimson/20 border border-crimson flex items-center justify-center text-crimson-light">
               <Shield className="h-4 w-4" />
@@ -73,19 +71,6 @@ export function CommandCenterShell({
               </span>
             </div>
           </Link>
-
-          {/* Demo Mode Toggle */}
-          <button
-            onClick={toggleDemoMode}
-            title="Toggle between Live Database Mode and Deterministic Preview Mode"
-            className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors ${
-              isDemoMode
-                ? "bg-amber-950/60 border-amber-700 text-amber-300"
-                : "bg-neutral-900 border-neutral-700 text-neutral-400 hover:text-white"
-            }`}
-          >
-            {isDemoMode ? "DEMO ON" : "LIVE"}
-          </button>
         </div>
 
         {/* Workspace Switcher */}
@@ -173,17 +158,10 @@ export function CommandCenterShell({
           </div>
 
           <div className="flex items-center gap-3">
-            {isDemoMode ? (
-              <div className="px-2.5 py-1 rounded bg-amber-950/40 border border-amber-800 text-xs font-mono text-amber-300 flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                <span>PREVIEW MODE (DEMO DATA)</span>
-              </div>
-            ) : (
-              <div className="px-2.5 py-1 rounded bg-background border border-border-subtle text-xs font-mono text-neutral-300 flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>LIVE SUPABASE DB</span>
-              </div>
-            )}
+            <div className="px-2.5 py-1 rounded bg-background border border-border-subtle text-xs font-mono text-neutral-300 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span>LIVE SYSTEM</span>
+            </div>
             <Link
               href="/notifications"
               className="relative h-8 w-8 rounded-md hover:bg-background-tertiary border border-border-subtle flex items-center justify-center text-neutral-300 hover:text-white transition-colors"

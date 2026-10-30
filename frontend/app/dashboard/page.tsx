@@ -11,7 +11,6 @@ import { Alert } from "@/components/ui/Alert";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { useWorkspace } from "@/context/WorkspaceContext";
-import { useDemoMode } from "@/context/DemoModeContext";
 import { apiClient } from "@/lib/api-client";
 import {
   Asset,
@@ -45,7 +44,6 @@ import { AddAssetModal } from "@/components/assets/AddAssetModal";
 export default function DashboardPage() {
   const { profile } = useAuth();
   const { activeWorkspace, workspaces, loadingWorkspaces } = useWorkspace();
-  const { isDemoMode } = useDemoMode();
 
   const [metrics, setMetrics] = useState<DashboardMetricsResponse | null>(null);
   const [trends, setTrends] = useState<DashboardTrendsResponse | null>(null);
@@ -171,7 +169,7 @@ export default function DashboardPage() {
                       <span className="text-3xl font-bold font-mono text-white">
                         {metrics?.risk?.current_score !== null && metrics?.risk?.current_score !== undefined
                           ? metrics.risk.current_score.toFixed(1)
-                          : (isDemoMode ? "78.5" : "--")}
+                          : "--"}
                       </span>
                       <Badge
                         variant={
@@ -200,7 +198,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-3xl font-bold font-mono text-crimson-light">
-                        {metrics ? metrics.findings.open : (isDemoMode ? "4" : 0)}
+                        {metrics ? metrics.findings.open : 0}
                       </span>
                       <span className="text-xs text-neutral-400 font-mono">
                         ({metrics ? metrics.findings.fixed : 0} fixed)
@@ -229,7 +227,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-3xl font-bold font-mono text-amber-400">
-                        {isDemoMode ? "3" : attackPaths.length}
+                        {attackPaths.length}
                       </span>
                       <span className="text-xs text-neutral-400 font-mono">active chains</span>
                     </div>

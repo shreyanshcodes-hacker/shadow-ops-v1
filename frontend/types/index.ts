@@ -33,6 +33,33 @@ export interface WorkspaceMember {
   joined_at: string;
 }
 
+export interface WorkspaceDirectoryItem {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  members_count: number;
+  created_at: string;
+}
+
+export interface EmployeeJoinRequest {
+  display_name: string;
+  job_title?: string;
+}
+
+export interface CompanyOnboardingRequest {
+  company_name: string;
+  slug?: string;
+  industry?: string;
+  team_size?: string;
+  display_name?: string;
+  asset_name?: string;
+  asset_type?: "repository" | "api" | "infrastructure" | "application" | "container";
+  asset_identifier?: string;
+  asset_environment?: string;
+  asset_criticality?: "low" | "medium" | "high" | "critical";
+}
+
 export type AssetType = "repository" | "api" | "infrastructure" | "application" | "container";
 export type AssetCriticality = "low" | "medium" | "high" | "critical";
 export type AuthorizationStatus = "authorized" | "pending" | "revoked" | "expired" | "verified";

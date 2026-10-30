@@ -101,3 +101,73 @@ async def test_invite_and_remove_member(client: AsyncClient, auth_headers_owner,
     after_res = await client.get(f"/api/v1/workspaces/{ws_id}/members", headers=auth_headers_owner)
     assert after_res.status_code == 200
     assert len(after_res.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_company_onboarding_and_asset_setup(client: AsyncClient, auth_headers_owner):
+    payload = {
+        "company_name": "Acme Cyber Corp",
+        "slug": "acme-cyber-corp",
+        "industry": "FinTech",
+        "team_size": "10-50",
+        "display_name": "Chief Security Officer",
+        "asset_name": "Production Core API",
+        "asset_type": "repository",
+        "asset_identifier": "https://github.com/acme/core-api",
+        "asset_environment": "production",
+        "asset_criticality": "critical",
+    }
+    res = await client.post("/api/v1/workspaces/onboarding/company", json=payload, headers=auth_headers_owner)
+    assert res.status_code == 201
+    ws_data = res.json()
+    assert ws_data["name"] == "Acme Cyber Corp"
+    assert ws_data["slug"] == "acme-cyber-corp"
+    ws_id = ws_data["id"]
+
+    # Verify asset was created and authorized
+    assets_res = await client.get(f"/api/v1/workspaces/{ws_id}/assets", headers=auth_headers_owner)
+    assert assets_res.status_code == 200
+    assets = assets_res.json()
+    assert len(assets) == 1
+    assert assets[0]["name"] == "Production Core API"
+    assert assets[0]["authorization_status"] in ["verified", "authorized"]
+
+
+@pytest.mark.asyncio
+async def test_employee_directory_and_join_flow(client: AsyncClient, auth_headers_owner, auth_headers_other):
+    # 1. First ensure a company workspace exists
+    setup_payload = {
+        "company_name": "Nexus Defense Labs",
+        "slug": "nexus-defense-labs",
+    }
+    create_res = await client.post("/api/v1/workspaces/onboarding/company", json=setup_payload, headers=auth_headers_owner)
+    assert create_res.status_code == 201
+    target_company = create_res.json()
+
+    # 2. Employee queries directory
+    dir_res = await client.get("/api/v1/workspaces/directory", headers=auth_headers_other)
+    assert dir_res.status_code == 200
+    companies = dir_res.json()
+    assert len(companies) >= 1
+    assert any(c["id"] == target_company["id"] for c in companies)
+
+    # 3. Employee searches directory by prefix
+    search_res = await client.get(f"/api/v1/workspaces/directory?q={target_company['name'][:5]}", headers=auth_headers_other)
+    assert search_res.status_code == 200
+    search_items = search_res.json()
+    assert any(c["id"] == target_company["id"] for c in search_items)
+
+    # 4. Employee joins company
+    join_res = await client.post(
+        f"/api/v1/workspaces/{target_company['id']}/join",
+        json={"display_name": "Bob Employee", "job_title": "Security Analyst"},
+        headers=auth_headers_other,
+    )
+    assert join_res.status_code == 200
+    assert join_res.json()["id"] == target_company["id"]
+
+    # 5. Verify employee can now access workspace
+    my_ws_res = await client.get(f"/api/v1/workspaces/{target_company['id']}", headers=auth_headers_other)
+    assert my_ws_res.status_code == 200
+
+

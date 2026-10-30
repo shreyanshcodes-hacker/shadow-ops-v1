@@ -5,10 +5,14 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.workspace_repo import WorkspaceRepository
 from app.repositories.profile_repo import ProfileRepository
-from app.schemas.profile import ProfileCreate
+from app.schemas.profile import ProfileCreate, ProfileUpdate
 from app.models.workspace import Workspace, WorkspaceMember
 from app.models.profile import Profile
-from app.schemas.workspace import WorkspaceCreate, WorkspaceRole
+from app.schemas.workspace import (
+    WorkspaceCreate,
+    WorkspaceRole,
+    CompanyOnboardingRequest,
+)
 from app.services.audit_service import AuditService
 from app.schemas.audit import AuditEventType
 
@@ -177,3 +181,104 @@ class WorkspaceService:
             resource_type="workspace_member",
             resource_id=member_id,
         )
+
+    async def get_directory(self, search: Optional[str] = None) -> List[dict]:
+        return await self.workspace_repo.list_directory(search)
+
+    async def join_workspace(
+        self,
+        workspace_id: UUID,
+        user: Profile,
+        display_name: Optional[str] = None,
+        job_title: Optional[str] = None,
+    ) -> Workspace:
+        workspace = await self.workspace_repo.get_by_id(workspace_id)
+        if not workspace:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company workspace not found")
+
+        existing = await self.workspace_repo.get_membership(workspace_id, user.id)
+        if not existing:
+            await self.workspace_repo.add_member(
+                workspace_id=workspace_id,
+                user_id=user.id,
+                role=WorkspaceRole.MEMBER,
+            )
+            await self.audit_service.log(
+                workspace_id=workspace_id,
+                user_id=user.id,
+                action=AuditEventType.MEMBER_ADDED,
+                resource_type="workspace_member",
+                resource_id=workspace.id,
+                new_state={"role": "member", "joined_via": "employee_onboarding", "job_title": job_title},
+            )
+
+        if display_name and display_name.strip():
+            profile_repo = ProfileRepository(self.session)
+            await profile_repo.update(user.id, ProfileUpdate(display_name=display_name.strip()))
+
+        return workspace
+
+    async def onboard_company(self, req: CompanyOnboardingRequest, user: Profile) -> Tuple[Workspace, Optional[Any]]:
+        # 1. Update display name if provided
+        if req.display_name and req.display_name.strip():
+            profile_repo = ProfileRepository(self.session)
+            await profile_repo.update(user.id, ProfileUpdate(display_name=req.display_name.strip()))
+
+        # 2. Create workspace
+        settings_dict = {}
+        if req.industry:
+            settings_dict["industry"] = req.industry
+        if req.team_size:
+            settings_dict["team_size"] = req.team_size
+
+        ws_create = WorkspaceCreate(name=req.company_name, slug=req.slug)
+        workspace = await self.create_workspace(ws_create, user)
+        if settings_dict:
+            workspace.settings = settings_dict
+            await self.session.commit()
+            await self.session.refresh(workspace)
+
+        # 3. If asset details provided, create and authorize initial asset
+        created_asset = None
+        if req.asset_name and req.asset_name.strip():
+            from app.services.asset_service import AssetService
+            from app.services.authorization_service import AuthorizationService
+            from app.schemas.asset import AssetCreate, AssetType, AssetCriticality
+            from app.schemas.authorization import AuthorizationCreate, AuthorizationStatus
+
+            asset_service = AssetService(self.session)
+            atype = req.asset_type or "repository"
+            try:
+                asset_type_enum = AssetType(atype)
+            except Exception:
+                asset_type_enum = AssetType.REPOSITORY
+
+            crit = req.asset_criticality or "high"
+            try:
+                crit_enum = AssetCriticality(crit)
+            except Exception:
+                crit_enum = AssetCriticality.HIGH
+
+            asset_in = AssetCreate(
+                name=req.asset_name.strip(),
+                type=asset_type_enum,
+                identifier=req.asset_identifier or "https://github.com/company/repo",
+                environment=req.asset_environment or "production",
+                criticality=crit_enum,
+                description=f"Initial onboarding asset for {req.company_name}",
+            )
+            created_asset = await asset_service.create_asset(asset_in, workspace_id=workspace.id, user_id=user.id)
+
+            # Auto-authorize asset for workspace owner
+            auth_service = AuthorizationService(self.session)
+            await auth_service.record_authorization(
+                asset_id=created_asset.id,
+                workspace_id=workspace.id,
+                auth_in=AuthorizationCreate(
+                    status=AuthorizationStatus.AUTHORIZED,
+                    scope_limits={"environment": req.asset_environment or "production"},
+                ),
+                user_id=user.id,
+            )
+
+        return workspace, created_asset

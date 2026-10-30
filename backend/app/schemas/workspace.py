@@ -56,3 +56,31 @@ class WorkspaceMemberResponse(BaseModel):
     joined_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class WorkspaceDirectoryItem(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    plan: str
+    members_count: int
+    created_at: Optional[datetime] = None
+
+
+class EmployeeJoinRequest(BaseModel):
+    display_name: Optional[str] = None
+    job_title: Optional[str] = None
+
+
+class CompanyOnboardingRequest(BaseModel):
+    company_name: str = Field(min_length=2, max_length=100)
+    slug: Optional[str] = None
+    industry: Optional[str] = None
+    team_size: Optional[str] = None
+    display_name: Optional[str] = None
+    asset_name: Optional[str] = None
+    asset_type: Optional[str] = "repository"
+    asset_identifier: Optional[str] = None
+    asset_environment: Optional[str] = "production"
+    asset_criticality: Optional[str] = "high"
+

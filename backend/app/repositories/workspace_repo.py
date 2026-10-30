@@ -127,3 +127,26 @@ class WorkspaceRepository:
         )
         result = await self.session.execute(query)
         return list(result.all())
+
+    async def list_directory(self, search: Optional[str] = None) -> List[dict]:
+        query = (
+            select(Workspace)
+            .where(Workspace.deleted_at.is_(None))
+            .options(joinedload(Workspace.members))
+            .order_by(Workspace.created_at.desc())
+        )
+        if search and search.strip():
+            query = query.where(Workspace.name.ilike(f"%{search.strip()}%"))
+        result = await self.session.execute(query)
+        workspaces = list(result.unique().scalars().all())
+        return [
+            {
+                "id": w.id,
+                "name": w.name,
+                "slug": w.slug,
+                "plan": w.plan,
+                "members_count": len(w.members),
+                "created_at": w.created_at,
+            }
+            for w in workspaces
+        ]

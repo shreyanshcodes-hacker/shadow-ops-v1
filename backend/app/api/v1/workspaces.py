@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.profile import Profile
@@ -9,6 +9,9 @@ from app.schemas.workspace import (
     WorkspaceResponse,
     WorkspaceMemberResponse,
     MemberInvite,
+    WorkspaceDirectoryItem,
+    EmployeeJoinRequest,
+    CompanyOnboardingRequest,
 )
 from app.security.dependencies import get_current_user, RequireWorkspaceMember
 from app.services.workspace_service import WorkspaceService
@@ -26,6 +29,29 @@ async def list_my_workspaces(
     return await service.list_workspaces(current_user.id)
 
 
+@router.get("/directory", response_model=List[WorkspaceDirectoryItem])
+async def list_workspace_directory(
+    q: Optional[str] = Query(default=None, description="Search companies by name"),
+    current_user: Profile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List or search registered companies for employee onboarding."""
+    service = WorkspaceService(db)
+    return await service.get_directory(q)
+
+
+@router.post("/onboarding/company", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
+async def onboard_company_endpoint(
+    req: CompanyOnboardingRequest,
+    current_user: Profile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Onboarding endpoint: Registers a company workspace and sets up initial assets."""
+    service = WorkspaceService(db)
+    workspace, _asset = await service.onboard_company(req, current_user)
+    return workspace
+
+
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
 async def create_workspace(
     workspace_in: WorkspaceCreate,
@@ -35,6 +61,25 @@ async def create_workspace(
     """Create a new workspace. The creating user automatically becomes the OWNER."""
     service = WorkspaceService(db)
     return await service.create_workspace(workspace_in, current_user)
+
+
+@router.post("/{workspace_id}/join", response_model=WorkspaceResponse)
+async def join_company_workspace(
+    workspace_id: UUID,
+    req: Optional[EmployeeJoinRequest] = None,
+    current_user: Profile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Allows an employee to join an existing registered company workspace."""
+    service = WorkspaceService(db)
+    display_name = req.display_name if req else None
+    job_title = req.job_title if req else None
+    return await service.join_workspace(
+        workspace_id=workspace_id,
+        user=current_user,
+        display_name=display_name,
+        job_title=job_title,
+    )
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)

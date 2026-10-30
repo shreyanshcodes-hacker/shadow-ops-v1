@@ -19,7 +19,7 @@ from app.ai.schemas import (
     SecurityChatRequest,
     SecurityChatResponse,
 )
-from app.ai.provider import get_ai_provider
+from app.ai.provider import get_ai_provider, AIRequestConfig
 from app.ai.manager import AISecurityManager
 from app.services.ai_analysis_service import AIAnalysisService
 from app.security.dependencies import get_current_user
@@ -234,10 +234,12 @@ async def security_chat(
     full_prompt = f"{context_str}\n{history_str}USER: {request.message}\nASSISTANT:"
 
     provider = get_ai_provider()
+    cfg = AIRequestConfig(timeout_seconds=20, max_retries=1)
     try:
         ai_res = await provider.generate_text(
             prompt=full_prompt,
             system_instruction=system_instruction,
+            config=cfg,
         )
         reply = ai_res.content
     except Exception as e:

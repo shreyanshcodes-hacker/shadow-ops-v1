@@ -5,6 +5,7 @@ import { User, onIdTokenChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import {
   firebaseSignIn,
+  firebaseSignInWithGoogle,
   firebaseSignUp,
   firebaseSignOut,
   firebaseSendPasswordReset,
@@ -21,6 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isEmailVerified: boolean;
   login: (email: string, password: string) => Promise<User | void>;
+  loginWithGoogle: () => Promise<User | void>;
   signup: typeof firebaseSignUp;
   logout: () => Promise<void>;
   resetPassword: typeof firebaseSendPasswordReset;
@@ -120,8 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshProfile]);
 
   const login = async (email: string, password: string): Promise<User | void> => {
-    // 1. Direct local dev login check
-    if (email.toLowerCase() === "operator@shadowops.io" || !isFirebaseConfigured) {
+    // Offline environment fallback if Firebase credentials are absent
+    if (!isFirebaseConfigured) {
       if (typeof window !== "undefined") {
         localStorage.setItem(LOCAL_TOKEN_KEY, LOCAL_DEV_TOKEN);
       }
@@ -132,26 +134,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return devUser;
     }
 
-    // 2. Production Firebase Authentication with fallback
-    try {
-      const user = await firebaseSignIn(email, password);
-      setFirebaseUser(user);
-      await refreshProfile();
-      return user;
-    } catch (err) {
-      // Fallback to local dev user if Firebase auth is unavailable
-      if (email.toLowerCase() === "operator@shadowops.io") {
-        if (typeof window !== "undefined") {
-          localStorage.setItem(LOCAL_TOKEN_KEY, LOCAL_DEV_TOKEN);
-        }
-        setApiAuthToken(LOCAL_DEV_TOKEN);
-        const devUser = createMockDevUser(email);
-        setFirebaseUser(devUser);
-        await refreshProfile();
-        return devUser;
+    // Live Firebase Authentication
+    const user = await firebaseSignIn(email, password);
+    setFirebaseUser(user);
+    await refreshProfile();
+    return user;
+  };
+
+  const loginWithGoogle = async (): Promise<User | void> => {
+    if (!isFirebaseConfigured) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LOCAL_TOKEN_KEY, LOCAL_DEV_TOKEN);
       }
-      throw err;
+      setApiAuthToken(LOCAL_DEV_TOKEN);
+      const devUser = createMockDevUser("google-operator@shadowops.io");
+      setFirebaseUser(devUser);
+      await refreshProfile();
+      return devUser;
     }
+
+    const user = await firebaseSignInWithGoogle();
+    setFirebaseUser(user);
+    await refreshProfile();
+    return user;
   };
 
   const logout = async () => {
@@ -182,6 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: Boolean(firebaseUser && profile),
     isEmailVerified: Boolean(firebaseUser?.emailVerified),
     login,
+    loginWithGoogle,
     signup: firebaseSignUp,
     logout,
     resetPassword: firebaseSendPasswordReset,

@@ -23,6 +23,4 @@ Write-Host "2. Launching Frontend on http://localhost:3000..." -ForegroundColor 
 Start-Process -FilePath "cmd.exe" -ArgumentList "/k npm --prefix frontend start"
 
 Write-Host "`nPlatform is running!" -ForegroundColor Cyan
-Write-Host "Access URL: http://localhost:3000/login" -ForegroundColor Yellow
-Write-Host "Email:    operator@shadowops.io" -ForegroundColor Yellow
-Write-Host "Password: Password123!" -ForegroundColor Yellow
+Write-Host "Access URL: http://localhost:3000" -ForegroundColor Yellow

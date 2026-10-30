@@ -23,12 +23,14 @@ T = TypeVar("T", bound=BaseModel)
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 DEPRECATED_MODELS: Dict[str, str] = {
-    "gemini-1.5-flash": "gemini-flash-latest",
-    "gemini-1.5-pro": "gemini-flash-latest",
-    "gemini-2.0-flash": "gemini-flash-latest",
-    "gemini-2.0-flash-lite": "gemini-flash-latest",
-    "gemini-2.5-flash": "gemini-flash-latest",
-    "gemini-2.5-flash-lite": "gemini-flash-latest",
+    "gemini-1.5-flash": "gemini-3.1-flash-lite",
+    "gemini-1.5-pro": "gemini-3.5-flash",
+    "gemini-2.0-flash": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-flash-latest": "gemini-3.1-flash-lite",
+    "gemini-pro": "gemini-3.5-flash",
 }
 
 
@@ -42,7 +44,7 @@ class GeminiProvider(AIProvider):
         http_client: Optional[httpx.AsyncClient] = None,
     ):
         self.api_key = api_key or settings.GEMINI_API_KEY
-        raw_model = default_model or settings.GEMINI_MODEL or "gemini-flash-latest"
+        raw_model = default_model or settings.GEMINI_MODEL or "gemini-3.1-flash-lite"
         self.default_model = DEPRECATED_MODELS.get(raw_model, raw_model)
         self._http_client = http_client
 

@@ -8,6 +8,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Alert";
 import { Shield, MailCheck, RotateCw, LogOut } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
+import { Workspace } from "@/types";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -40,7 +42,16 @@ export default function VerifyEmailPage() {
         await firebaseUser.reload();
         if (firebaseUser.emailVerified) {
           await refreshProfile();
-          router.push("/dashboard");
+          try {
+            const list = await apiClient.get<Workspace[]>("/workspaces");
+            if (list && list.length > 0) {
+              router.push("/dashboard");
+            } else {
+              router.push("/onboarding");
+            }
+          } catch {
+            router.push("/onboarding");
+          }
           return;
         }
       }

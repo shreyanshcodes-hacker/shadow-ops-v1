@@ -31,20 +31,20 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: Optional[str] = None
 
     # Firebase Authentication
-    FIREBASE_PROJECT_ID: str = "shadow-ops-test"
+    FIREBASE_PROJECT_ID: str = "shadow-ops-6957d"
     FIREBASE_CLIENT_EMAIL: Optional[str] = None
     FIREBASE_PRIVATE_KEY: Optional[str] = None
 
     # AI Providers & Controls
     AI_PROVIDER: str = "gemini"
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-flash-latest"
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
     GROK_API_KEY: Optional[str] = None
     GROK_MODEL: str = "grok-beta"
     AI_MAX_FINDINGS_PER_RUN: int = 25
     AI_MAX_INPUT_CHARS: int = 12000
-    AI_REQUEST_TIMEOUT_SECONDS: int = 45
-    AI_MAX_RETRIES: int = 3
+    AI_REQUEST_TIMEOUT_SECONDS: int = 25
+    AI_MAX_RETRIES: int = 1
     AI_COST_CAP_PER_RUN_USD: float = 2.0
     AI_PROMPT_VERSION: str = "v1.0"
 
