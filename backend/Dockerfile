@@ -1,6 +1,6 @@
 # ==============================================================================
-# SHADOWOPS — FASTAPI BACKEND CONTAINER (GOOGLE CLOUD RUN)
-# Optimized Python container with Semgrep SAST & Supabase PostgreSQL support
+# SHADOWOPS — FASTAPI BACKEND CONTAINER (RENDER / CLOUD RUN)
+# Optimized Python 3.11 container with Semgrep SAST & Supabase PostgreSQL support
 # ==============================================================================
 
 FROM python:3.11-slim
@@ -10,20 +10,21 @@ ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     PORT=8000
 
-# Install system dependencies & Semgrep SAST engine
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     git \
     curl \
-    && pip install --no-cache-dir semgrep \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy requirements and install Python packages
+# Copy requirements and install Python packages (including Semgrep SAST CLI)
 COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && semgrep --version
 
 # Copy backend source code
 COPY . /app/

@@ -67,6 +67,9 @@ In the [Render Dashboard](https://dashboard.render.com/):
    - **Docker Context:** `.` (relative to Root Directory `backend`)
    - **Instance Type:** Starter (0.5 CPU, 512 MB RAM) or Standard (1 CPU, 2 GB RAM recommended for Semgrep scans)
 
+> [!IMPORTANT]  
+> **Always set Root Directory to `backend`:** Do not leave Root Directory empty (`.`), as the repository root contains a full-stack local emulator `Dockerfile` that builds Node.js, Supabase CLI, and compiles CPython from source. Setting **Root Directory** to `backend` ensures Render uses the fast, production-hardened [`backend/Dockerfile`](file:///d:/Shreyanshcodes/shadow-ops-v2/backend/Dockerfile) (`FROM python:3.11-slim`) paired with [`backend/.dockerignore`](file:///d:/Shreyanshcodes/shadow-ops-v2/backend/.dockerignore).
+
 ---
 
 ## 4. Alternative Deployment: Native Python Runtime
@@ -188,6 +191,26 @@ pytest backend/tests
 - Non-root user: appuser (UID 1000)
 - Signal forwarding: exec uvicorn ...
 - Dynamic PORT binding: --port ${PORT:-8000}
+- Image Isolation: backend/.dockerignore excludes .env*, *.pem, *.key, venv/, and *.db
+```
+
+### 8.2 Live Post-Deployment Verification Steps
+
+Once your Render Web Service reaches the **Live** state, run the following verification checks from your terminal:
+
+```bash
+# 1. Verify Liveness Health Probe
+curl -i https://<your-render-service>.onrender.com/health
+
+# 2. Verify Readiness Probe (Supabase DB & Semgrep CLI)
+curl -i https://<your-render-service>.onrender.com/ready
+
+# 3. Verify Production CORS Preflight for Vercel Origin
+curl -i -X OPTIONS https://<your-render-service>.onrender.com/api/v1/me \
+  -H "Origin: https://shadow-ops-v1.vercel.app" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: Authorization,Content-Type"
+# Expected header: access-control-allow-origin: https://shadow-ops-v1.vercel.app
 ```
 
 ---
