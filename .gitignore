@@ -21,8 +21,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+backend/lib/
+backend/lib64/
 parts/
 sdist/
 var/
@@ -34,6 +34,10 @@ wheels/
 .coverage
 htmlcov/
 .mypy_cache/
+
+# Whitelist frontend/lib
+!frontend/lib/
+!frontend/lib/**
 
 # Node & Next.js
 frontend/node_modules/

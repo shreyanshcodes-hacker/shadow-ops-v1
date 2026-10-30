@@ -81,9 +81,15 @@ class Settings(BaseSettings):
 
     @property
     def parsed_cors_origins(self) -> List[str]:
-        if self.is_production:
-            return [self.FRONTEND_URL]
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        origins = []
+        if self.FRONTEND_URL:
+            origins.append(self.FRONTEND_URL.strip().rstrip("/"))
+        if self.CORS_ORIGINS:
+            for origin in self.CORS_ORIGINS.split(","):
+                clean = origin.strip().rstrip("/")
+                if clean and clean not in origins:
+                    origins.append(clean)
+        return origins or ["http://localhost:3000"]
 
 
 settings = Settings()
