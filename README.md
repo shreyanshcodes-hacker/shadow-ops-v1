@@ -15,7 +15,7 @@ ShadowOps is an AI-native cybersecurity SaaS platform designed primarily for sta
 - **Authentication**: Firebase Authentication (ID Token verification via Firebase Admin SDK).
 - **AI Orchestration**: Multi-model routing abstraction supporting Google Gemini & xAI Grok.
 - **Code Analysis**: Semgrep SAST/SCA runner interface.
-- **Deployment**: Railway multi-service production topology.
+- **Deployment**: Vercel Edge (Next.js Frontend) + Dedicated Container (FastAPI & Semgrep Backend). See [VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md).
 
 ---
 
