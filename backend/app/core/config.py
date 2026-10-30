@@ -62,7 +62,7 @@ class Settings(BaseSettings):
 
     # Security & CORS
     SECRET_KEY: str = "temporary-secret-key-for-development-change-in-production-32chars"
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://shadow-ops-v1.vercel.app"
 
     # Background Workers & Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -89,6 +89,10 @@ class Settings(BaseSettings):
                 clean = origin.strip().rstrip("/")
                 if clean and clean not in origins:
                     origins.append(clean)
+        # Always guarantee deployed Vercel frontend is an authorized origin
+        production_origin = "https://shadow-ops-v1.vercel.app"
+        if production_origin not in origins:
+            origins.append(production_origin)
         return origins or ["http://localhost:3000"]
 
 

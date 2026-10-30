@@ -100,11 +100,39 @@ async def generic_exception_handler(request: Request, exc: Exception):
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 
-@app.get("/")
+@app.get("/", tags=["Root"])
 async def root():
     return {
         "service": "ShadowOps Security API",
         "tagline": "Your AI Security Team. Always Watching.",
         "status": "online",
-        "api_docs": f"{settings.API_V1_PREFIX}/health",
+        "health": "/health",
+        "readiness": "/ready",
+        "api_v1": settings.API_V1_PREFIX,
+    }
+
+
+@app.get("/health", tags=["Health & Observability"])
+async def root_health():
+    """Basic application liveness health check."""
+    return {
+        "status": "healthy",
+        "service": "ShadowOps Security API",
+        "environment": settings.ENVIRONMENT,
+        "version": "1.0.0",
+    }
+
+
+@app.get("/ready", tags=["Health & Observability"])
+async def root_ready():
+    """Readiness probe checking database connectivity without leaking credentials."""
+    import shutil
+    from app.db.session import check_database_connection
+    db_ok = await check_database_connection()
+    semgrep_ok = bool(shutil.which("semgrep"))
+    return {
+        "status": "ready" if db_ok else "degraded",
+        "database": {"connected": db_ok},
+        "scanner": {"engine": "semgrep", "available": semgrep_ok},
+        "environment": settings.ENVIRONMENT,
     }

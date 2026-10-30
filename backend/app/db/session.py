@@ -10,9 +10,13 @@ _cloud_sql_connector: Optional[Any] = None
 def get_async_database_url(url: str) -> str:
     """Normalize database connection string to asyncpg for async SQLAlchemy."""
     if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+    # Normalize sslmode=require to ssl=require for asyncpg compatibility
+    if "sslmode=" in url:
+        url = url.replace("sslmode=require", "ssl=require").replace("sslmode=", "ssl=")
     return url
 
 

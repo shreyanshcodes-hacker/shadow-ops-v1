@@ -1,20 +1,18 @@
 services:
   - type: web
     name: shadowops-backend
-    runtime: python
+    runtime: docker
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     plan: starter
+    healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
-        value: false
+        value: "false"
       - key: PORT
-        value: 10000
+        value: "10000"
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL
@@ -36,6 +34,6 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        sync: false
+        value: https://shadow-ops-v1.vercel.app
       - key: CORS_ORIGINS
-        sync: false
+        value: https://shadow-ops-v1.vercel.app,http://localhost:3000
