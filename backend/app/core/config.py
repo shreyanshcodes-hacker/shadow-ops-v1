@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # AI Providers & Controls
     AI_PROVIDER: str = "gemini"
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
     GROK_API_KEY: Optional[str] = None
     GROK_MODEL: str = "grok-beta"
     AI_MAX_FINDINGS_PER_RUN: int = 25

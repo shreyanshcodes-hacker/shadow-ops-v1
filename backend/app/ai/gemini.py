@@ -1,8 +1,9 @@
 import json
 import logging
 import asyncio
+import re
 import time
-from typing import Type, TypeVar, Optional, Dict, Any
+from typing import Type, TypeVar, Optional, Dict, Any, List, Tuple
 import httpx
 from pydantic import BaseModel
 
@@ -23,15 +24,26 @@ T = TypeVar("T", bound=BaseModel)
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 DEPRECATED_MODELS: Dict[str, str] = {
-    "gemini-1.5-flash": "gemini-3.1-flash-lite",
-    "gemini-1.5-pro": "gemini-3.5-flash",
-    "gemini-2.0-flash": "gemini-3.1-flash-lite",
-    "gemini-2.0-flash-lite": "gemini-3.1-flash-lite",
-    "gemini-2.5-flash": "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite": "gemini-3.1-flash-lite",
-    "gemini-flash-latest": "gemini-3.1-flash-lite",
-    "gemini-pro": "gemini-3.5-flash",
+    "gemini-1.5-flash": "gemini-flash-lite-latest",
+    "gemini-1.5-pro": "gemini-3-flash-preview",
+    "gemini-2.0-flash": "gemini-flash-lite-latest",
+    "gemini-2.0-flash-lite": "gemini-flash-lite-latest",
+    "gemini-2.5-flash": "gemini-flash-lite-latest",
+    "gemini-2.5-flash-lite": "gemini-flash-lite-latest",
+    "gemini-pro": "gemini-3-flash-preview",
 }
+
+FALLBACK_MODELS: List[str] = [
+    "gemini-flash-lite-latest",
+    "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+]
+
+
+def _redact_api_key(text: str) -> str:
+    return re.sub(r"key=[^&\s'\"]+", "key=[REDACTED]", text)
 
 
 class GeminiProvider(AIProvider):
@@ -43,8 +55,9 @@ class GeminiProvider(AIProvider):
         default_model: Optional[str] = None,
         http_client: Optional[httpx.AsyncClient] = None,
     ):
-        self.api_key = api_key or settings.GEMINI_API_KEY
-        raw_model = default_model or settings.GEMINI_MODEL or "gemini-3.1-flash-lite"
+        raw_key = api_key or settings.GEMINI_API_KEY
+        self.api_key = raw_key.strip().strip('"').strip("'") if raw_key else None
+        raw_model = default_model or settings.GEMINI_MODEL or "gemini-flash-lite-latest"
         self.default_model = DEPRECATED_MODELS.get(raw_model, raw_model)
         self._http_client = http_client
 
@@ -97,7 +110,6 @@ class GeminiProvider(AIProvider):
         cfg: AIRequestConfig,
         model: str,
     ) -> AITextResponse:
-        url = f"{GEMINI_API_URL.format(model=model)}?key={self.api_key}"
         body: Dict[str, Any] = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
@@ -109,13 +121,13 @@ class GeminiProvider(AIProvider):
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
         start_time = time.time()
-        data = await self._send_with_retry(url, body, cfg)
+        data, resolved_model = await self._send_with_model_failover(model, body, cfg)
         latency = int((time.time() - start_time) * 1000)
 
         # Extract text candidate
         candidates = data.get("candidates", [])
         if not candidates:
-            raise RuntimeError(f"Gemini returned no candidates: {data}")
+            raise RuntimeError("Gemini returned no candidates")
 
         parts = candidates[0].get("content", {}).get("parts", [])
         content = parts[0].get("text", "") if parts else ""
@@ -128,7 +140,7 @@ class GeminiProvider(AIProvider):
 
         metadata = AIResponseMetadata(
             provider=self.provider_name,
-            model=model,
+            model=resolved_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
@@ -145,7 +157,6 @@ class GeminiProvider(AIProvider):
         cfg: AIRequestConfig,
         model: str,
     ) -> AIStructuredResponse:
-        url = f"{GEMINI_API_URL.format(model=model)}?key={self.api_key}"
         json_schema = response_schema.model_json_schema()
 
         body: Dict[str, Any] = {
@@ -161,12 +172,12 @@ class GeminiProvider(AIProvider):
             body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
         start_time = time.time()
-        data = await self._send_with_retry(url, body, cfg)
+        data, resolved_model = await self._send_with_model_failover(model, body, cfg)
         latency = int((time.time() - start_time) * 1000)
 
         candidates = data.get("candidates", [])
         if not candidates:
-            raise RuntimeError(f"Gemini returned no candidates: {data}")
+            raise RuntimeError("Gemini returned no candidates")
 
         parts = candidates[0].get("content", {}).get("parts", [])
         raw_text = parts[0].get("text", "{}") if parts else "{}"
@@ -192,7 +203,7 @@ class GeminiProvider(AIProvider):
 
         metadata = AIResponseMetadata(
             provider=self.provider_name,
-            model=model,
+            model=resolved_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
@@ -205,38 +216,52 @@ class GeminiProvider(AIProvider):
             metadata=metadata,
         )
 
-    async def _send_with_retry(self, url: str, body: Dict[str, Any], cfg: AIRequestConfig) -> Dict[str, Any]:
-        """Sends HTTP request to Gemini with bounded retries and exponential backoff for 429/5xx."""
+    async def _send_with_model_failover(
+        self,
+        primary_model: str,
+        body: Dict[str, Any],
+        cfg: AIRequestConfig,
+    ) -> Tuple[Dict[str, Any], str]:
+        """
+        Sends HTTP request to Gemini with automatic model failover across healthy Gemini Flash
+        endpoints when a specific model experiences 503 high demand, 429 rate limits, or 404 deprecation.
+        Never exposes the API key in raised error messages.
+        """
+        candidate_models: List[str] = [primary_model]
+        for fb in FALLBACK_MODELS:
+            if fb not in candidate_models:
+                candidate_models.append(fb)
+
         client = self._http_client or httpx.AsyncClient(timeout=float(cfg.timeout_seconds))
         should_close = self._http_client is None
-
-        retries = 0
-        backoff = 1.0
+        last_error: Optional[Exception] = None
 
         try:
-            while True:
+            for candidate in candidate_models:
+                url = f"{GEMINI_API_URL.format(model=candidate)}?key={self.api_key}"
                 try:
                     resp = await client.post(url, json=body)
                     if resp.status_code == 200:
-                        return resp.json()
-                    elif resp.status_code in (429, 500, 502, 503, 504):
-                        retries += 1
-                        if retries > cfg.max_retries:
-                            resp.raise_for_status()
+                        return resp.json(), candidate
+                    elif resp.status_code in (404, 429, 500, 502, 503, 504):
                         logger.warning(
-                            f"Gemini API returned status {resp.status_code}. Backing off {backoff}s (attempt {retries}/{cfg.max_retries})"
+                            f"Gemini model '{candidate}' returned HTTP {resp.status_code}; failing over to next model."
                         )
-                        await asyncio.sleep(backoff)
-                        backoff *= 2.0
+                        last_error = RuntimeError(
+                            f"Gemini model '{candidate}' returned HTTP {resp.status_code}"
+                        )
+                        continue
                     else:
                         resp.raise_for_status()
-                except (httpx.TimeoutException, httpx.NetworkError) as e:
-                    retries += 1
-                    if retries > cfg.max_retries:
-                        raise RuntimeError(f"Gemini network error after {retries} attempts: {str(e)}") from e
-                    logger.warning(f"Gemini connection error: {str(e)}. Retrying in {backoff}s...")
-                    await asyncio.sleep(backoff)
-                    backoff *= 2.0
+                except Exception as e:
+                    sanitized_msg = _redact_api_key(str(e))
+                    logger.warning(f"Gemini request on model '{candidate}' failed ({sanitized_msg}); trying fallback.")
+                    last_error = RuntimeError(sanitized_msg)
+                    continue
+
+            if last_error:
+                raise last_error
+            raise RuntimeError("All Gemini model endpoints failed to respond.")
         finally:
             if should_close:
                 await client.aclose()
