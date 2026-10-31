@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,6 +33,95 @@ from app.repositories.ai_repo import AIRepository
 
 logger = logging.getLogger("shadowops.api.ai")
 router = APIRouter(tags=["AI Security Manager & Analyst"])
+
+SECURITY_DOMAIN_KEYWORDS = {
+    "security", "vulnerability", "vulnerabilities", "finding", "findings", "scan", "scans",
+    "scanner", "semgrep", "sast", "dast", "asset", "assets", "attack", "path", "paths",
+    "risk", "score", "cwe", "cve", "owasp", "sql", "sqli", "xss", "csrf", "ssrf", "rce",
+    "injection", "auth", "authentication", "authorization", "rbac", "iam", "token", "jwt",
+    "secret", "secrets", "credential", "credentials", "password", "key", "keys", "aws",
+    "cloud", "gcp", "azure", "patch", "patches", "remediate", "remediation", "fix", "fixes",
+    "verify", "verification", "code", "repo", "repository", "endpoint", "api", "server",
+    "database", "db", "encrypt", "encryption", "tls", "ssl", "https", "certificate",
+    "hash", "crypto", "exploit", "threat", "malware", "ransomware", "phishing", "pentest",
+    "firewall", "waf", "cors", "csp", "header", "headers", "dependency", "dependencies",
+    "package", "cve", "audit", "compliance", "report", "reports", "workspace", "shadowops",
+    "sentinel", "posture", "perimeter", "lateral", "privilege", "escalation", "traversal",
+    "deserialization", "subprocess", "shell", "command", "eval", "exec", "hardcoded",
+    "leak", "exposure", "breach", "incident", "triage", "severity", "critical", "high",
+    "medium", "low", "node", "edge", "graph", "devsecops", "cicd", "pipeline", "container",
+    "docker", "kubernetes", "k8s", "helm", "terraform", "iac", "misconfiguration",
+    "sanitize", "validation", "input", "output", "encode", "escape", "session", "cookie",
+}
+
+OFF_TOPIC_PATTERNS = re.compile(
+    r"\b(prime minister|president|election|politician|government of|capital of|currency of|"
+    r"population of|who won the|world cup|cricket|football|basketball|ipl|fifa|olympics|"
+    r"movie|actor|actress|bollywood|hollywood|singer|song|lyrics|recipe|how to cook|"
+    r"weather in|temperature in|stock price|bitcoin price|crypto price|horoscope|astrology|"
+    r"zodiac|tell me a joke|write a poem|write a story|write an essay|who is the richest|"
+    r"tallest building|largest country|founder of|ceo of|wife of|husband of|age of|"
+    r"born in|died in|history of india|history of america|solar system|planet|dinosaurs)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_out_of_scope_query(message: str, asset_names: List[str], finding_titles: List[str]) -> bool:
+    """
+    Deterministically checks whether a user chat message is outside the ShadowOps
+    workspace & cybersecurity context so off-topic questions are strictly refused.
+    """
+    clean = message.strip().lower()
+    if not clean:
+        return True
+
+    # If it matches explicit off-topic / general-knowledge patterns, reject immediately
+    if OFF_TOPIC_PATTERNS.search(clean):
+        return True
+
+    # Check if message references any workspace asset or finding title directly
+    for name in asset_names + finding_titles:
+        if name and name.lower() in clean:
+            return False
+
+    # Allow brief conversational greetings/meta questions about Sentinel itself
+    if clean in {"hi", "hello", "hey", "help", "what can you do", "what can you do?", "who are you", "who are you?"}:
+        return False
+
+    # Check if any cybersecurity / workspace domain keyword appears in the query
+    words = set(re.findall(r"[a-z0-9_\-]+", clean))
+    if words & SECURITY_DOMAIN_KEYWORDS:
+        return False
+
+    # Check substring matches for prefixes like "vuln", "remediat", "auth", "sec", "crypt"
+    security_stems = ("vuln", "remediat", "auth", "sec", "crypt", "inject", "config", "perm", "priv", "cert", "tok")
+    if any(stem in clean for stem in security_stems):
+        return False
+
+    # Reject any query with zero workspace or cybersecurity relevance
+    return True
+
+
+def _build_scope_refusal_reply(
+    assets_count: int,
+    asset_names: List[str],
+    findings_count: int,
+    top_findings: List[str],
+    attack_paths_count: int,
+) -> str:
+    assets_display = ", ".join(f"`{a}`" for a in asset_names[:3]) if asset_names else "None registered"
+    findings_display = ", ".join(f"**{t}**" for t in top_findings[:3]) if top_findings else "No open findings"
+    return (
+        "### ShadowOps Sentinel — Scope Boundary Enforced\n\n"
+        "I am strictly restricted to operating within your **ShadowOps workspace security context** "
+        "and defensive cybersecurity engineering. I cannot answer general knowledge, political, or "
+        "off-topic questions outside of your security posture.\n\n"
+        "#### Active Workspace Telemetry Available for Consultation:\n"
+        f"- **Monitored Assets ({assets_count}):** {assets_display}\n"
+        f"- **Open Security Findings ({findings_count}):** {findings_display}\n"
+        f"- **Synthesized Attack Paths:** **{attack_paths_count}** active chains\n\n"
+        "Please ask a question related to your workspace vulnerabilities, attack paths, risk scores, or secure code remediation."
+    )
 
 
 @router.post("/scans/{scan_id}/ai-analysis", response_model=ScanAnalysisSummaryResponse, status_code=status.HTTP_200_OK)
@@ -232,15 +322,44 @@ async def security_chat(
         ],
     }
 
-    # Build prompt with history
+    suggested_actions = [
+        "Analyze latest critical vulnerabilities",
+        "How do I fix SQL injection in our code?",
+        "What is our highest risk attack path?",
+        "Generate remediation proposal",
+    ]
+
+    asset_names_list = [a.name for a in assets]
+    finding_titles_list = [f.title for f in findings]
+
+    # Hard Pre-LLM Context Boundary Check: immediately refuse out-of-scope queries
+    if _is_out_of_scope_query(request.message, asset_names_list, finding_titles_list):
+        refusal_reply = _build_scope_refusal_reply(
+            assets_count=len(assets),
+            asset_names=asset_names_list,
+            findings_count=len(findings),
+            top_findings=finding_titles_list,
+            attack_paths_count=len(attack_paths),
+        )
+        return SecurityChatResponse(
+            reply=refusal_reply,
+            provider="shadowops-guardrail",
+            grounded_context=grounded_context,
+            suggested_actions=suggested_actions,
+        )
+
+    # Build prompt with strict context boundary instructions
     system_instruction = (
-        "You are ShadowOps Sentinel, an expert AI application security consultant embedded in the user's DevSecOps team.\n"
-        "Your mission is to provide defensive, actionable, and mathematically grounded cybersecurity guidance.\n"
-        "RULES:\n"
-        "1. Never provide offensive attack payloads, weaponized exploit code, or harmful instructions.\n"
-        "2. Ground your advice in the user's workspace telemetry and standard CWE/OWASP frameworks.\n"
-        "3. Explain root causes clearly with before/after secure code remediation examples when applicable.\n"
-        "4. Keep your responses clear, structured (using Markdown headers and bullet points), and professional."
+        "You are ShadowOps Sentinel, an AI application security consultant strictly scoped to the user's ShadowOps workspace.\n"
+        "STRICT CONTEXT BOUNDARY RULES (MANDATORY):\n"
+        "1. You MUST ONLY answer questions directly related to:\n"
+        "   a) The user's ShadowOps workspace telemetry provided in Workspace Context (assets, findings, vulnerabilities, scans, attack paths, risk scores, remediations, and reports), OR\n"
+        "   b) Defensive cybersecurity, application security (AppSec), DevSecOps, CWE/CVE/OWASP analysis, and secure code remediation.\n"
+        "2. NEVER answer general knowledge, political, historical, geographical, sports, entertainment, or non-security questions.\n"
+        "3. CRITICAL PROHIBITION: NEVER include the answer to an off-topic question even as a side remark (e.g., NEVER write 'While X is Y, let us focus on security...').\n"
+        "4. If any part of a user message asks about topics outside cybersecurity or workspace telemetry, refuse that part completely and only address the workspace security context.\n"
+        "5. Never provide offensive attack payloads, weaponized exploit code, or harmful instructions.\n"
+        "6. Ground your advice in the user's workspace telemetry and provide clear before/after secure code remediation examples when applicable."
     )
 
     ap_summary = (
@@ -287,13 +406,6 @@ async def security_chat(
                 f"Synthesized Attack Paths: **{len(attack_paths)}**.\n\n"
                 "- Review the **Attack Paths** and **Findings** views for deterministic risk breakdowns and remediation diffs."
             )
-
-    suggested_actions = [
-        "Analyze latest critical vulnerabilities",
-        "How do I fix SQL injection in our code?",
-        "What is our highest risk attack path?",
-        "Generate remediation proposal",
-    ]
 
     return SecurityChatResponse(
         reply=reply,
